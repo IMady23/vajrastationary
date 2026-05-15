@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Package, IndianRupee, Tag, Layers, CheckCircle2, AlertCircle, Save } from 'lucide-react'
+import { Package, IndianRupee, Tag, Layers, CheckCircle2, AlertCircle, Save, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { supabase, CATEGORIES } from '../lib/supabase'
 
@@ -165,21 +165,42 @@ export default function EditProduct() {
               </div>
             )}
 
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => navigate('/manage')}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-primary font-bold py-4 rounded-2xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={loading}
+                  type="submit"
+                  className="flex-[2] bg-brand hover:bg-brand/90 disabled:opacity-50 text-black font-black py-4 rounded-2xl shadow-xl shadow-brand/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  <Save className="w-5 h-5" />
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+              
               <button
                 type="button"
-                onClick={() => navigate('/manage')}
-                className="flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl transition-all"
+                onClick={async () => {
+                  if (confirm('Are you sure you want to delete this product? This cannot be undone.')) {
+                    setLoading(true)
+                    const { error } = await supabase.from('products').delete().eq('id', id)
+                    if (error) {
+                      alert('Error deleting product')
+                      setLoading(false)
+                    } else {
+                      navigate('/manage')
+                    }
+                  }
+                }}
+                className="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white font-bold py-3 rounded-2xl transition-all flex items-center justify-center gap-2"
               >
-                Cancel
-              </button>
-              <button
-                disabled={loading}
-                type="submit"
-                className="flex-[2] bg-brand hover:bg-brand/90 disabled:opacity-50 text-black font-black py-4 rounded-2xl shadow-xl shadow-brand/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                <Save className="w-5 h-5" />
-                {loading ? 'Saving...' : 'Save Changes'}
+                <Trash2 className="w-4 h-4" /> Delete Product
               </button>
             </div>
           </>
