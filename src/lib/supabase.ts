@@ -15,6 +15,32 @@ export type Product = {
   created_at?: string
 }
 
+export type Sale = {
+  id: string
+  items: any[]
+  total: number
+  profit: number
+  customer_phone?: string
+  created_at?: string
+}
+
+export type Expense = {
+  id: string
+  category: string
+  amount: number
+  description: string
+  date: string
+  created_at?: string
+}
+
+export type Customer = {
+  phone: string
+  name: string
+  total_spent: number
+  last_visit: string
+  created_at?: string
+}
+
 export const CATEGORIES = [
   'General',
   'Writing',

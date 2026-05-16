@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase, type Product } from '../lib/supabase'
-import { Edit2, Trash2, Search, Package, Plus, Lock, ArrowRight } from 'lucide-react'
+import { Edit2, Trash2, Search, Package, Plus, Minus, Lock, ArrowRight, Download, Upload } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
+import Papa from 'papaparse'
 
 export default function ManageProducts() {
   const [products, setProducts] = useState<Product[]>([])
@@ -53,6 +54,61 @@ export default function ManageProducts() {
     } catch (error) {
       alert('Error deleting product')
     }
+  }
+
+  const updateStock = async (id: string, currentStock: number, delta: number) => {
+    const newStock = Math.max(0, currentStock + delta)
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ stock: newStock })
+        .eq('id', id)
+      
+      if (error) throw error
+      setProducts(products.map(p => p.id === id ? { ...p, stock: newStock } : p))
+    } catch (error) {
+      alert('Error updating stock')
+    }
+  }
+
+  const handleExportCSV = () => {
+    const csv = Papa.unparse(products)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', 'vajra_inventory.csv')
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const importedProducts = results.data.map((row: any) => ({
+          name: row.name,
+          price: parseFloat(row.price),
+          stock: parseInt(row.stock),
+          category: row.category || 'General'
+        }))
+
+        try {
+          const { error } = await supabase.from('products').insert(importedProducts)
+          if (error) throw error
+          alert(`Successfully imported ${importedProducts.length} products!`)
+          window.location.reload()
+        } catch (err: any) {
+          alert('Error importing: ' + err.message)
+        }
+      }
+    })
   }
 
   const handlePinSubmit = (e: React.FormEvent) => {
@@ -143,12 +199,25 @@ export default function ManageProducts() {
           <h2 className="text-4xl font-black tracking-tight">Manage Inventory</h2>
           <p className="text-white/40">Edit or delete your shop products.</p>
         </div>
-        <Link 
-          to="/add" 
-          className="inline-flex items-center gap-2 bg-brand text-black px-6 py-3 rounded-2xl font-black text-sm shadow-xl shadow-brand/20 transition-all hover:scale-105"
-        >
-          <Plus className="w-5 h-5" /> Add New Product
-        </Link>
+        
+        <div className="flex items-center gap-3">
+           <button 
+             onClick={handleExportCSV}
+             className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border border-white/10"
+           >
+             <Download className="w-4 h-4" /> Export CSV
+           </button>
+           <label className="px-4 py-2 bg-brand text-black rounded-xl text-xs font-black cursor-pointer hover:scale-105 transition-all flex items-center gap-2">
+             <Upload className="w-4 h-4" /> Import CSV
+             <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
+           </label>
+           <Link 
+             to="/add" 
+             className="inline-flex items-center gap-2 bg-white text-black px-6 py-3 rounded-2xl font-black text-sm shadow-xl transition-all hover:scale-105"
+           >
+             <Plus className="w-5 h-5" /> Add Product
+           </Link>
+        </div>
       </div>
 
       <div className="glass rounded-3xl overflow-hidden">
@@ -199,9 +268,23 @@ export default function ManageProducts() {
                       <span className="font-black text-brand">₹{product.price}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${product.stock < 10 ? 'bg-red-500' : 'bg-green-500'}`} />
-                        <span className="font-medium text-sm">{product.stock} units</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10">
+                          <button 
+                            onClick={() => updateStock(product.id, product.stock, -1)}
+                            className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-10 text-center text-sm font-black">{product.stock}</span>
+                          <button 
+                            onClick={() => updateStock(product.id, product.stock, 1)}
+                            className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className={`w-2 h-2 rounded-full ${product.stock < 10 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-green-500'}`} />
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">

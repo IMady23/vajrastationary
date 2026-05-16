@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { Search, PlusCircle, LayoutDashboard, Settings, ShoppingBag } from 'lucide-react'
+import { Search, PlusCircle, LayoutDashboard, Settings, ShoppingBag, Package, IndianRupee, Users } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -11,8 +11,11 @@ function cn(...inputs: ClassValue[]) {
 
 const navItems = [
   { path: '/', label: 'Search', icon: Search },
+  { path: '/dashboard', label: 'Stats', icon: LayoutDashboard },
   { path: '/add', label: 'Add', icon: PlusCircle },
-  { path: '/manage', label: 'Manage', icon: LayoutDashboard },
+  { path: '/manage', label: 'Inventory', icon: Package },
+  { path: '/expenses', label: 'Expenses', icon: IndianRupee },
+  { path: '/customers', label: 'Customers', icon: Users },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -25,12 +28,24 @@ export default function Layout() {
       <header className="sticky top-0 z-50 glass border-b border-glass px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="p-2 bg-brand rounded-xl shadow-lg shadow-brand/20 group-hover:scale-110 transition-transform duration-300">
-              <ShoppingBag className="w-6 h-6 text-black" />
+            <div className="relative">
+              <div className="absolute inset-0 bg-brand/20 blur-xl rounded-full group-hover:bg-brand/40 transition-all" />
+              <img src="/logo.png" className="w-12 h-12 object-contain relative z-10 group-hover:scale-110 transition-transform duration-300" 
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const parent = e.currentTarget.parentElement;
+                  if (parent) {
+                    const fallback = document.createElement('div');
+                    fallback.className = 'w-10 h-10 bg-brand rounded-xl flex items-center justify-center text-black font-black';
+                    fallback.innerText = 'V';
+                    parent.appendChild(fallback);
+                  }
+                }}
+              />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight text-primary">
-                Vajra Stationery
+              <h1 className="text-xl font-black tracking-tight text-primary uppercase">
+                <span className="gold-gradient">Vajra</span> Stationery
               </h1>
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted font-black">
                 & Xerox Services

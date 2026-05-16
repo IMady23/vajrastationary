@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Store, Database, Moon, Bell, Shield, Cloud, CheckCircle2, Smartphone, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Store, Database, Moon, Bell, Shield, Cloud, CheckCircle2, Smartphone, Mail, Lock, Eye, EyeOff, IndianRupee } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 type SettingsTab = 'profile' | 'database' | 'appearance' | 'notifications' | 'security'
@@ -8,6 +8,10 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [shopName, setShopName] = useState('Vajra Stationery & Xerox')
   const [address, setAddress] = useState('')
+  const [upiId, setUpiId] = useState('')
+  const [whatsappMessage, setWhatsappMessage] = useState('Thank you for shopping with us!')
+  const [taxRate, setTaxRate] = useState(0)
+  const [isShopOpen, setIsShopOpen] = useState(true)
   const [saveSuccess, setSaveSuccess] = useState(false)
   
   // App Preferences
@@ -24,11 +28,19 @@ export default function Settings() {
   useEffect(() => {
     const savedName = localStorage.getItem('vajra_shop_name')
     const savedAddress = localStorage.getItem('vajra_shop_address')
+    const savedUpi = localStorage.getItem('vajra_shop_upi')
+    const savedMsg = localStorage.getItem('vajra_whatsapp_msg')
+    const savedTax = localStorage.getItem('vajra_tax_rate')
+    const savedStatus = localStorage.getItem('vajra_shop_status')
     const savedTheme = localStorage.getItem('vajra_theme')
     const savedPin = localStorage.getItem('vajra_security_pin')
     
     if (savedName) setShopName(savedName)
     if (savedAddress) setAddress(savedAddress)
+    if (savedUpi) setUpiId(savedUpi)
+    if (savedMsg) setWhatsappMessage(savedMsg)
+    if (savedTax) setTaxRate(Number(savedTax))
+    if (savedStatus) setIsShopOpen(savedStatus === 'open')
     if (savedTheme === 'light') {
       setDarkMode(false)
       document.documentElement.classList.add('light')
@@ -51,6 +63,10 @@ export default function Settings() {
   const handleSave = () => {
     localStorage.setItem('vajra_shop_name', shopName)
     localStorage.setItem('vajra_shop_address', address)
+    localStorage.setItem('vajra_shop_upi', upiId)
+    localStorage.setItem('vajra_whatsapp_msg', whatsappMessage)
+    localStorage.setItem('vajra_tax_rate', taxRate.toString())
+    localStorage.setItem('vajra_shop_status', isShopOpen ? 'open' : 'closed')
     localStorage.setItem('vajra_security_pin', pin)
     setSaveSuccess(true)
     setTimeout(() => setSaveSuccess(false), 2000)
@@ -89,6 +105,14 @@ export default function Settings() {
                       <label className="text-[10px] uppercase tracking-[0.2em] font-black text-white/20">Address</label>
                       <textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="alugunoor chowrastha,hyd road..." className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all min-h-[120px] font-medium" />
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase tracking-[0.2em] font-black text-white/20">UPI ID for Payments</label>
+                      <input type="text" value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="e.g. yourname@okaxis" className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase tracking-[0.2em] font-black text-white/20">Custom WhatsApp Footer</label>
+                      <textarea value={whatsappMessage} onChange={(e) => setWhatsappMessage(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-medium" />
+                    </div>
                   </div>
                 </section>
                 <button onClick={handleSave} className="w-full bg-brand text-black font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95">
@@ -125,6 +149,34 @@ export default function Settings() {
                     <button onClick={toggleTheme} className={`relative w-12 h-6 rounded-full transition-all ${darkMode ? 'bg-brand' : 'bg-white/10'}`}>
                       <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all ${darkMode ? 'translate-x-6' : ''}`} />
                     </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-500 rounded-lg"><Store className="text-black w-4 h-4" /></div>
+                      <span className="font-bold">Shop Status (Open)</span>
+                    </div>
+                    <button onClick={() => setIsShopOpen(!isShopOpen)} className={`relative w-12 h-6 rounded-full transition-all ${isShopOpen ? 'bg-green-500' : 'bg-red-500'}`}>
+                      <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all ${isShopOpen ? 'translate-x-6' : ''}`} />
+                    </button>
+                  </div>
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-4">
+                    <div className="flex items-center gap-3">
+                       <IndianRupee className="w-5 h-5 text-brand" />
+                       <span className="font-bold">Tax (GST) Rate</span>
+                    </div>
+                    <div className="flex gap-2">
+                       {[0, 5, 12, 18].map(rate => (
+                         <button 
+                           key={rate} 
+                           onClick={() => setTaxRate(rate)}
+                           className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${taxRate === rate ? 'bg-brand text-black' : 'bg-white/5 text-muted'}`}
+                         >
+                           {rate}%
+                         </button>
+                       ))}
+                    </div>
                   </div>
                 </div>
               </motion.div>
