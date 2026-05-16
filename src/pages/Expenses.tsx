@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, IndianRupee, Calendar, Tag, CreditCard, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, IndianRupee } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase, type Expense } from '../lib/supabase'
 
@@ -12,7 +12,7 @@ export default function Expenses() {
   const [category, setCategory] = useState('Stock Purchase')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date] = useState(new Date().toISOString().split('T')[0])
 
   useEffect(() => {
     fetchExpenses()

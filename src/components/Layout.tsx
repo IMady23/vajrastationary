@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { Search, PlusCircle, LayoutDashboard, Settings, ShoppingBag, Package, IndianRupee, Users } from 'lucide-react'
+import { Search, PlusCircle, LayoutDashboard, Settings, Package, IndianRupee, Users } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'

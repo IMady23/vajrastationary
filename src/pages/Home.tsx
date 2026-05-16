@@ -3,7 +3,7 @@ import { Search, Package, IndianRupee, Tag, ChevronRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase, type Product, CATEGORIES } from '../lib/supabase'
 import { useCart } from '../context/CartContext'
-import { PenTool, FileText, Printer, Palette, BookOpen, Briefcase, Box, X, SortAsc, Filter } from 'lucide-react'
+import { PenTool, FileText, Printer, Palette, BookOpen, Briefcase, Box, X, SortAsc } from 'lucide-react'
 import QuickPrint from '../components/QuickPrint'
 
 const CATEGORY_ICONS: Record<string, any> = {
@@ -15,8 +15,6 @@ const CATEGORY_ICONS: Record<string, any> = {
   'Office': Briefcase,
   'All': Box
 }
-
-const SAMPLE_PRODUCTS: Product[] = []
 
 export default function Home() {
   const { addToCart } = useCart()

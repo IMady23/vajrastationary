@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { TrendingUp, ShoppingBag, Users, IndianRupee, ArrowUpRight, ArrowDownRight, Package, Search } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Users, IndianRupee, Search } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase, type Sale } from '../lib/supabase'

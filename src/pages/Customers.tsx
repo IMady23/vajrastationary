@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Search, Phone, IndianRupee, Calendar, UserPlus, Trash2 } from 'lucide-react'
+import { Search, UserPlus, Trash2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase, type Customer } from '../lib/supabase'
 
