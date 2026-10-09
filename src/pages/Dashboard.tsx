@@ -1,297 +1,367 @@
 import { useState, useEffect, useMemo } from 'react'
-import { TrendingUp, ShoppingBag, Users, IndianRupee, Search } from 'lucide-react'
+import { Package, AlertTriangle, Search, Plus, Camera, IndianRupee, Clock, MapPin } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { supabase, type Sale } from '../lib/supabase'
-import { startOfWeek, endOfWeek, eachDayOfInterval, format, isSameDay } from 'date-fns'
+import { type Product, type Sale, getCategoryStyle } from '../types'
+import { getRecentSearches } from '../lib/recentSearches'
+import { ProductService } from '../services/ProductService'
+import { AnalyticsService } from '../services/AnalyticsService'
+import { RecognitionService } from '../services/RecognitionService'
+import { Link, useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
+  const [products, setProducts] = useState<Product[]>([])
   const [sales, setSales] = useState<Sale[]>([])
+  const [recentSearches, setRecentSearches] = useState<Product[]>([])
+  const [recentRecognitions, setRecentRecognitions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const navigate = useNavigate()
 
   useEffect(() => {
-    async function fetchSales() {
+    async function fetchData() {
       try {
-        const { data, error } = await supabase
-          .from('sales')
-          .select('*')
-          .order('created_at', { ascending: false })
-        
-        if (error) throw error
-        if (data) setSales(data)
-      } catch (e) {
-        console.error('Error fetching sales:', e)
+        const [productsData, salesData, recognitionsData] = await Promise.all([
+          ProductService.getProducts(),
+          AnalyticsService.getSales(20),
+          RecognitionService.getRecognitionHistory(5)
+        ])
+
+        if (productsData) setProducts(productsData)
+        if (salesData) setSales(salesData)
+        if (recognitionsData) setRecentRecognitions(recognitionsData)
+        setRecentSearches(getRecentSearches())
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err)
       } finally {
         setLoading(false)
       }
     }
-    fetchSales()
+    fetchData()
   }, [])
 
-  // Process chart data from real sales
-  const chartData = useMemo(() => {
-    if (viewMode === 'weekly') {
-      const start = startOfWeek(new Date(), { weekStartsOn: 1 })
-      const end = endOfWeek(new Date(), { weekStartsOn: 1 })
-      const days = eachDayOfInterval({ start, end })
-
-      return days.map(day => {
-        const daySales = sales.filter(sale => isSameDay(new Date(sale.created_at!), day))
-        const total = daySales.reduce((acc, s) => acc + s.total, 0)
-        return {
-          name: format(day, 'EEE'),
-          sales: total
-        }
-      })
-    } else if (viewMode === 'monthly') {
-      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
-      const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
-      
-      // Group by weeks or 5-day intervals for monthly view
-      const groups = []
-      for (let i = 0; i < days.length; i += 5) {
-        const slice = days.slice(i, i + 5)
-        const total = sales.filter(sale => {
-          const d = new Date(sale.created_at!)
-          return d >= slice[0] && d <= slice[slice.length - 1]
-        }).reduce((acc, s) => acc + s.total, 0)
-        
-        groups.push({
-          name: `${format(slice[0], 'd')}-${format(slice[slice.length - 1], 'd')}`,
-          sales: total
-        })
-      }
-      return groups
-    } else {
-      // Daily (Last 24 hours grouped by 4h intervals)
-      return [0, 4, 8, 12, 16, 20].map(hour => {
-        const total = sales.filter(sale => {
-          const d = new Date(sale.created_at!)
-          return isSameDay(d, new Date()) && d.getHours() >= hour && d.getHours() < hour + 4
-        }).reduce((acc, s) => acc + s.total, 0)
-        return { name: `${hour}:00`, sales: total }
-      })
-    }
-  }, [sales, viewMode])
-
   const stats = useMemo(() => {
-    const totalRevenue = sales.reduce((acc, sale) => acc + sale.total, 0)
-    const totalProfit = sales.reduce((acc, sale) => acc + (sale.profit || 0), 0)
-    const totalOrders = sales.length
-    const uniqueCustomers = new Set(sales.map(s => s.customer_phone).filter(p => p !== 'Walk-in')).size
-    const avgOrder = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0
+    const totalProducts = products.length
+    const lowStockCount = products.filter((p) => (p.quantity ?? p.stock) < 10).length
+    const outOfStockCount = products.filter((p) => (p.quantity ?? p.stock) <= 0).length
+    const todaySales = sales.reduce((sum, s) => sum + (s.total || 0), 0)
 
-    return { totalRevenue, totalProfit, totalOrders, uniqueCustomers, avgOrder }
-  }, [sales])
+    return {
+      totalProducts,
+      lowStockCount,
+      outOfStockCount,
+      todaySales,
+    }
+  }, [products, sales])
 
-  const categoryStats = useMemo(() => {
-    const categories: Record<string, number> = {}
-    let totalItems = 0
-
-    sales.forEach(sale => {
-      sale.items.forEach((item: any) => {
-        const cat = item.category || 'General'
-        categories[cat] = (categories[cat] || 0) + item.quantity
-        totalItems += item.quantity
-      })
-    })
-
-    return Object.entries(categories)
-      .map(([label, count]) => ({
-        label,
-        percent: totalItems > 0 ? Math.round((count / totalItems) * 100) : 0
-      }))
-      .sort((a, b) => b.percent - a.percent)
-      .slice(0, 5)
-  }, [sales])
+  const recentlyAdded = useMemo(() => products.slice(0, 6), [products])
 
   return (
     <div className="space-y-8 pb-20">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-4xl font-black tracking-tight text-primary">Overview</h2>
-          <p className="text-muted font-medium">Real-time performance tracking.</p>
-        </div>
-        <div className="flex items-center gap-2 bg-input p-1 rounded-2xl border border-glass">
-          <button 
-            onClick={() => setViewMode('daily')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'daily' ? 'bg-brand text-black' : 'text-muted hover:text-primary'}`}
-          >
-            Today
-          </button>
-          <button 
-            onClick={() => setViewMode('weekly')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'weekly' ? 'bg-brand text-black' : 'text-muted hover:text-primary'}`}
-          >
-            Weekly
-          </button>
-          <button 
-            onClick={() => setViewMode('monthly')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'monthly' ? 'bg-brand text-black' : 'text-muted hover:text-primary'}`}
-          >
-            Monthly
-          </button>
+          <h2 className="text-4xl font-black tracking-tight text-primary">Shop Overview</h2>
+          <p className="text-muted font-medium">Fast daily stationery lookups, stock alerts & quick actions.</p>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          icon={IndianRupee} 
-          label="Total Revenue" 
-          value={`₹${stats.totalRevenue.toLocaleString()}`} 
-          color="bg-brand"
-        />
-        <StatCard 
-          icon={ShoppingBag} 
-          label="Total Orders" 
-          value={stats.totalOrders} 
-          color="bg-blue-500"
-        />
-        <StatCard 
-          icon={Users} 
-          label="Unique Customers" 
-          value={stats.uniqueCustomers} 
-          color="bg-purple-500"
-        />
-        <StatCard 
-          icon={TrendingUp} 
-          label="Avg. Order Value" 
-          value={`₹${stats.avgOrder}`} 
-          color="bg-green-500"
-        />
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 glass rounded-3xl p-8 space-y-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => navigate('/manage')}
+          className="glass glass-hover rounded-3xl p-6 space-y-4 cursor-pointer"
+        >
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-black">This Week's Sales</h3>
-            <TrendingUp className="w-5 h-5 text-brand" />
+            <div className="p-3 bg-brand rounded-2xl shadow-lg">
+              <Package className="w-6 h-6 text-black" />
+            </div>
           </div>
-          <div className="h-[300px] w-full">
-            {stats.totalOrders === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-muted gap-4">
-                <Search className="w-12 h-12 opacity-20" />
-                <p className="font-bold">No sales data yet this week</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ffb800" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#ffb800" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="rgba(255,255,255,0.2)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₹${value}`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
-                  />
-                  <Area type="monotone" dataKey="sales" stroke="#ffb800" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted font-black">Total Products</div>
+            <div className="text-3xl font-black text-primary mt-1">{stats.totalProducts}</div>
           </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onClick={() => navigate('/manage?filter=low-stock')}
+          className="glass glass-hover rounded-3xl p-6 space-y-4 cursor-pointer border-red-500/30"
+        >
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-red-500 rounded-2xl shadow-lg shadow-red-500/20">
+              <AlertTriangle className="w-6 h-6 text-white" />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-red-400 font-black">Low Stock (&lt;10)</div>
+            <div className="text-3xl font-black text-red-400 mt-1">{stats.lowStockCount}</div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          onClick={() => navigate('/')}
+          className="glass glass-hover rounded-3xl p-6 space-y-4 cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-blue-500 rounded-2xl shadow-lg">
+              <Search className="w-6 h-6 text-white" />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted font-black">Recent Lookups</div>
+            <div className="text-3xl font-black text-primary mt-1">{recentSearches.length} items</div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="glass rounded-3xl p-6 space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-green-500 rounded-2xl shadow-lg">
+              <IndianRupee className="w-6 h-6 text-black" />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted font-black">Recent Transactions</div>
+            <div className="text-3xl font-black text-green-400 mt-1">₹{stats.todaySales.toLocaleString()}</div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Quick Actions Panel */}
+      <div className="glass rounded-3xl p-6 md:p-8 space-y-4">
+        <h3 className="text-xs font-black uppercase tracking-widest text-brand">Quick Daily Shortcuts</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Link
+            to="/add"
+            className="p-4 rounded-2xl bg-white/5 hover:bg-brand hover:text-black transition-all group border border-glass flex flex-col items-center justify-center gap-2 text-center"
+          >
+            <Plus className="w-6 h-6 text-brand group-hover:text-black transition-colors" />
+            <span className="font-black text-sm">➕ Add Product</span>
+          </Link>
+
+          <Link
+            to="/ai-camera"
+            className="p-4 rounded-2xl bg-brand/10 hover:bg-brand hover:text-black transition-all border border-brand/50 flex flex-col items-center justify-center gap-2 text-center group"
+          >
+            <Camera className="w-6 h-6 text-brand group-hover:text-black transition-colors" />
+            <span className="font-black text-sm">📷 Launch AI Camera</span>
+            <span className="text-[9px] uppercase tracking-wider text-brand group-hover:text-black font-extrabold">Local-First Vision</span>
+          </Link>
+
+          <Link
+            to="/manage?filter=low-stock"
+            className="p-4 rounded-2xl bg-white/5 hover:bg-red-500/15 transition-all border border-red-500/30 flex flex-col items-center justify-center gap-2 text-center"
+          >
+            <AlertTriangle className="w-6 h-6 text-red-400" />
+            <span className="font-black text-sm text-red-400">⚠ Low Stock</span>
+          </Link>
+
+          <Link
+            to="/"
+            className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all border border-glass flex flex-col items-center justify-center gap-2 text-center"
+          >
+            <Search className="w-6 h-6 text-blue-400" />
+            <span className="font-black text-sm">🔍 Search Products</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Grid: Recently Searched & Recently Added */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recently Searched */}
+        <div className="glass rounded-3xl p-6 md:p-8 space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black flex items-center gap-2">
+              <Clock className="w-5 h-5 text-brand" />
+              Recently Searched
+            </h3>
+            <span className="text-xs text-muted font-bold">Fast 1-click lookup</span>
+          </div>
+
+          {recentSearches.length === 0 ? (
+            <div className="py-12 text-center text-muted font-medium text-sm">
+              No recent searches yet. Items you search will appear here!
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentSearches.slice(0, 5).map((product) => {
+                const catStyle = getCategoryStyle(product.category)
+                return (
+                  <div
+                    key={product.id}
+                    onClick={() => navigate(`/product/${product.id}`)}
+                    className="p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all flex items-center justify-between gap-4 cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-xl bg-input border border-glass overflow-hidden shrink-0 flex items-center justify-center">
+                        {product.primary_image ? (
+                          <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package className="w-5 h-5 text-brand/60" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <h4 className="font-black text-sm text-primary truncate group-hover:text-brand transition-colors">
+                          {product.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${catStyle.badgeClass}`}>
+                            {product.category}
+                          </span>
+                          {product.shelf_location && (
+                            <span className="text-[10px] text-muted font-bold flex items-center gap-0.5">
+                              <MapPin className="w-2.5 h-2.5" /> {product.shelf_location}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <div className="text-base font-black text-brand flex items-center justify-end">
+                          <IndianRupee className="w-3.5 h-3.5" />
+                          {product.selling_price ?? product.price}
+                        </div>
+                        <div className="text-[10px] font-bold text-muted">
+                          Stock: {product.quantity ?? product.stock}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
-        <div className="glass rounded-3xl p-8 space-y-6">
-          <h3 className="text-xl font-black">Top Categories</h3>
-          {categoryStats.length === 0 ? (
-            <div className="py-20 text-center text-muted text-sm font-bold">No items sold yet</div>
+        {/* Recently Added Products */}
+        <div className="glass rounded-3xl p-6 md:p-8 space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black flex items-center gap-2">
+              <Package className="w-5 h-5 text-brand" />
+              Recently Added Items
+            </h3>
+            <Link to="/manage" className="text-xs text-brand font-bold hover:underline">
+              View All
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="py-12 text-center text-muted">Loading items...</div>
+          ) : recentlyAdded.length === 0 ? (
+            <div className="py-12 text-center text-muted text-sm">No items in database yet.</div>
           ) : (
-            <div className="space-y-6">
-              {categoryStats.map((cat, i) => (
-                <CategoryProgress 
-                  key={cat.label} 
-                  label={cat.label} 
-                  percent={cat.percent} 
-                  color={i === 0 ? "bg-brand" : i === 1 ? "bg-blue-500" : "bg-purple-500"} 
-                />
-              ))}
+            <div className="space-y-3">
+              {recentlyAdded.map((product) => {
+                const catStyle = getCategoryStyle(product.category)
+                return (
+                  <div
+                    key={product.id}
+                    onClick={() => navigate(`/product/${product.id}`)}
+                    className="p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all flex items-center justify-between gap-4 cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-xl bg-input border border-glass overflow-hidden shrink-0 flex items-center justify-center">
+                        {product.primary_image ? (
+                          <img src={product.primary_image} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package className="w-5 h-5 text-brand/60" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <h4 className="font-black text-sm text-primary truncate group-hover:text-brand transition-colors">
+                          {product.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${catStyle.badgeClass}`}>
+                            {product.category}
+                          </span>
+                          {product.shelf_location && (
+                            <span className="text-[10px] text-muted font-bold">📍 {product.shelf_location}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="text-base font-black text-brand flex items-center justify-end">
+                        <IndianRupee className="w-3.5 h-3.5" />
+                        {product.selling_price ?? product.price}
+                      </div>
+                      <div className={`text-[10px] font-bold ${(product.quantity ?? product.stock) < 10 ? 'text-red-400' : 'text-muted'}`}>
+                        Stock: {product.quantity ?? product.stock}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* Recent Sales Table */}
-      <div className="glass rounded-3xl overflow-hidden">
-        <div className="p-8 border-b border-glass flex items-center justify-between">
-          <h3 className="text-xl font-black">Recent Transactions</h3>
+      {/* Recent AI Activity Widget */}
+      <div className="glass rounded-3xl p-6 md:p-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-black flex items-center gap-2">
+            <Camera className="w-5 h-5 text-brand" />
+            Recent AI Product Scans
+          </h3>
+          <Link to="/ai-camera" className="text-xs text-brand font-bold hover:underline">
+            Launch Camera
+          </Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-widest text-muted font-black border-b border-glass">
-                <th className="px-8 py-4">Transaction ID</th>
-                <th className="px-8 py-4">Customer</th>
-                <th className="px-8 py-4">Status</th>
-                <th className="px-8 py-4">Amount</th>
-                <th className="px-8 py-4">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-glass">
-              {loading ? (
-                 <tr><td colSpan={5} className="px-8 py-12 text-center text-muted font-bold">Loading transactions...</td></tr>
-              ) : sales.length === 0 ? (
-                <tr><td colSpan={5} className="px-8 py-20 text-center text-muted font-bold">No transactions found. Start billing to see data!</td></tr>
-              ) : sales.slice(0, 10).map((sale) => (
-                <tr key={sale.id} className="group hover:bg-white/5 transition-colors">
-                  <td className="px-8 py-4 font-mono text-xs">#{sale.id.slice(0, 8)}</td>
-                  <td className="px-8 py-4 font-bold">{sale.customer_phone || 'Walk-in'}</td>
-                  <td className="px-8 py-4">
-                    <span className="px-2 py-1 bg-green-500/10 text-green-500 text-[10px] font-black rounded-full">COMPLETED</span>
-                  </td>
-                  <td className="px-8 py-4 font-black">₹{sale.total.toLocaleString()}</td>
-                  <td className="px-8 py-4 text-xs text-muted">{new Date(sale.created_at!).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-}
 
-function StatCard({ icon: Icon, label, value, color }: any) {
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="glass rounded-3xl p-6 space-y-4 group hover:scale-[1.02] transition-transform duration-300"
-    >
-      <div className="flex items-center justify-between">
-        <div className={`p-3 ${color} rounded-2xl shadow-lg`}>
-          <Icon className="w-5 h-5 text-black" />
-        </div>
-      </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-muted font-black">{label}</div>
-        <div className="text-2xl font-black">{value}</div>
-      </div>
-    </motion.div>
-  )
-}
-
-function CategoryProgress({ label, percent, color }: any) {
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest">
-        <span className="text-muted">{label}</span>
-        <span className="text-primary">{percent}%</span>
-      </div>
-      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-        <motion.div 
-          initial={{ width: 0 }}
-          animate={{ width: `${percent}%` }}
-          className={`h-full ${color}`}
-        />
+        {recentRecognitions.length === 0 ? (
+          <div className="py-8 text-center text-muted font-medium text-sm">
+            No AI scans recorded yet. Use the AI Camera to recognize shelf items.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recentRecognitions.map((item, idx) => (
+              <div
+                key={item.id || idx}
+                className="p-3.5 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-input border border-glass overflow-hidden shrink-0 flex items-center justify-center">
+                    {item.captured_image ? (
+                      <img src={item.captured_image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Package className="w-5 h-5 text-brand/50" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-black text-sm text-primary truncate">
+                      {item.predicted_name}
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-brand/20 text-brand">
+                        {item.recognition_source || 'LOCAL'}
+                      </span>
+                      <span className="text-[10px] text-muted font-bold">
+                        {Math.round((item.confidence || 0) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

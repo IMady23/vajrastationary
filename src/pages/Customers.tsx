@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Search, UserPlus, Trash2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase, type Customer } from '../lib/supabase'
+import { type Customer } from '../types'
+import { AnalyticsService } from '../services/AnalyticsService'
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -19,8 +20,7 @@ export default function Customers() {
 
   const fetchCustomers = async () => {
     try {
-      const { data, error } = await supabase.from('customers').select('*').order('total_spent', { ascending: false })
-      if (error) throw error
+      const data = await AnalyticsService.getCustomers()
       setCustomers(data || [])
     } catch (err) {
       console.error(err)
@@ -32,13 +32,12 @@ export default function Customers() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('customers').insert([{
+      await AnalyticsService.saveCustomer({
         name,
         phone,
         total_spent: 0,
         last_visit: new Date().toISOString()
-      }])
-      if (error) throw error
+      })
       
       setName('')
       setPhone('')
@@ -52,8 +51,6 @@ export default function Customers() {
   const deleteCustomer = async (phone: string) => {
     if (!confirm('Delete this customer record?')) return
     try {
-      const { error } = await supabase.from('customers').delete().eq('phone', phone)
-      if (error) throw error
       setCustomers(customers.filter(c => c.phone !== phone))
     } catch (err) {
       alert('Error deleting customer')

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import { type Product } from '../lib/supabase'
+import { type Product } from '../types'
 
 export type CartItem = Product & { quantity: number }
 

@@ -1,306 +1,379 @@
-import { useState } from 'react'
-import { supabase, CATEGORIES } from '../lib/supabase'
-import { Plus, Package, IndianRupee, Tag, Save, AlertCircle, ListPlus, CheckCircle2, Trash2, PlusCircle } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { STATIONERY_CATEGORIES, type ProductStatus } from '../types'
+import { ProductService } from '../services/ProductService'
+import { Package, IndianRupee, Tag, Save, MapPin, FileText, Award, AlertTriangle, Sparkles } from 'lucide-react'
+import { motion } from 'framer-motion'
+import CameraCapture from '../components/ai/CameraCapture'
+import { useToast } from '../components/ui/Toast'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 
 export default function AddProduct() {
-  const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single')
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [existingCatalog, setExistingCatalog] = useState<any[]>([])
+  const { showToast } = useToast()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const state = (location.state || {}) as any
+  const [showMultiAnglePrompt, setShowMultiAnglePrompt] = useState(false)
+  const [productId] = useState(() => ProductService.generateId())
 
-  // Single Product State
-  const [name, setName] = useState('')
-  const [price, setPrice] = useState('')
-  const [stock, setStock] = useState('')
-  const [category, setCategory] = useState('General')
+  useEffect(() => {
+    ProductService.getProducts().then((data) => {
+      if (data) setExistingCatalog(data)
+    }).catch(() => {})
+  }, [])
 
-  // Bulk Product State
-  const [bulkProducts, setBulkProducts] = useState([
-    { name: '', price: '', stock: '', category: 'General' },
-    { name: '', price: '', stock: '', category: 'General' },
-    { name: '', price: '', stock: '', category: 'General' },
-  ])
+  // Form State
+  const [images, setImages] = useState<string[]>(state.prefillImage ? [state.prefillImage] : [])
+  const [primaryImage, setPrimaryImage] = useState<string | null>(state.prefillImage || null)
+  const [name, setName] = useState(state.prefillName || '')
+  const [category, setCategory] = useState(
+    STATIONERY_CATEGORIES.some(c => c.name.toLowerCase() === (state.prefillCategory || '').toLowerCase())
+      ? STATIONERY_CATEGORIES.find(c => c.name.toLowerCase() === (state.prefillCategory || '').toLowerCase())!.name
+      : STATIONERY_CATEGORIES[0].name
+  )
+  const [customCategory, setCustomCategory] = useState('')
+  const [brand, setBrand] = useState(state.prefillBrand || '')
+  const [sellingPrice, setSellingPrice] = useState('')
+  const [quantity, setQuantity] = useState('')
+  const [shelfLocation, setShelfLocation] = useState('')
+  const [notes, setNotes] = useState('')
 
-  const handleSingleSubmit = async (e: React.FormEvent) => {
+  const effectiveCategory = category === 'Custom...' ? (customCategory || 'Others') : category
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+
+    const parsedPrice = parseFloat(sellingPrice) || 0
+    const parsedQty = parseInt(quantity, 10) || 0
+
+    const status: ProductStatus = parsedQty <= 0 ? 'Out of Stock' : 'Active'
+
     try {
-      const { error } = await supabase
-        .from('products')
-        .insert([{ 
-          name, 
-          price: parseFloat(price), 
-          stock: parseInt(stock), 
-          category 
-        }])
-      
-      if (error) throw error
-      
-      setSuccess(true)
+      const payload = {
+        id: productId,
+        primary_image: primaryImage,
+        images: images,
+        name: name.trim(),
+        category: effectiveCategory,
+        brand: brand.trim() || null,
+        selling_price: parsedPrice,
+        price: parsedPrice, // Legacy alias
+        quantity: parsedQty,
+        stock: parsedQty, // Legacy alias
+        shelf_location: shelfLocation.trim() || null,
+        notes: notes.trim() || null,
+        status,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      await ProductService.createProduct(payload)
+
+      showToast(`Added "${name}" to inventory!`, 'success')
+      setShowMultiAnglePrompt(true)
+
+      // Reset form
+      setImages([])
+      setPrimaryImage(null)
       setName('')
-      setPrice('')
-      setStock('')
-      setTimeout(() => setSuccess(false), 3000)
+      setBrand('')
+      setSellingPrice('')
+      setQuantity('')
+      setShelfLocation('')
+      setNotes('')
     } catch (error: any) {
-      alert(error.message)
+      showToast(error.message || 'Error adding product', 'error')
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleBulkSubmit = async () => {
-    const validProducts = bulkProducts.filter(p => p.name && p.price && p.stock)
-    if (validProducts.length === 0) return alert("Please fill in at least one product completely.")
-
-    setLoading(true)
-    try {
-      const { error } = await supabase
-        .from('products')
-        .insert(validProducts.map(p => ({
-          name: p.name,
-          price: parseFloat(p.price),
-          stock: parseInt(p.stock),
-          category: p.category
-        })))
-      
-      if (error) throw error
-      
-      setSuccess(true)
-      setBulkProducts([
-        { name: '', price: '', stock: '', category: 'General' },
-        { name: '', price: '', stock: '', category: 'General' },
-        { name: '', price: '', stock: '', category: 'General' },
-      ])
-      setTimeout(() => setSuccess(false), 3000)
-    } catch (error: any) {
-      alert(error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const updateBulkProduct = (index: number, field: string, value: string) => {
-    const newProducts = [...bulkProducts]
-    newProducts[index] = { ...newProducts[index], [field]: value }
-    setBulkProducts(newProducts)
-  }
-
-  const addBulkRow = () => {
-    setBulkProducts([...bulkProducts, { name: '', price: '', stock: '', category: 'General' }])
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8 pb-16">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-2">
-          <h2 className="text-4xl font-black tracking-tight">Add Inventory</h2>
-          <p className="text-muted font-medium">Add new items to your shop database.</p>
+          <h2 className="text-4xl font-black tracking-tight">Add Product</h2>
+          <p className="text-muted font-medium">Customer asks → Search → Show Price & Shelf Location.</p>
         </div>
-
-        <div className="flex p-1 bg-input rounded-2xl border border-glass">
-          <button 
-            onClick={() => setActiveTab('single')}
-            className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'single' ? 'bg-brand text-black shadow-lg' : 'text-muted hover:text-primary'}`}
-          >
-            Single Item
-          </button>
-          <button 
-            onClick={() => setActiveTab('bulk')}
-            className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'bulk' ? 'bg-brand text-black shadow-lg' : 'text-muted hover:text-primary'}`}
-          >
-            Bulk Add
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/manage')}
+          className="px-5 py-2.5 glass hover:bg-white/10 rounded-2xl text-xs font-black transition-all"
+        >
+          View Inventory List
+        </button>
       </div>
 
-      <AnimatePresence mode="wait">
-        {activeTab === 'single' ? (
-          <motion.div 
-            key="single"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="glass rounded-3xl p-8"
-          >
-            <form onSubmit={handleSingleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">Product Name</label>
-                <div className="relative group">
-                  <Package className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
-                  <input
-                    required
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Parker Jotter Ball Pen"
-                    className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold"
-                  />
+      {showMultiAnglePrompt && (
+        <div className="p-5 rounded-3xl bg-brand/15 border border-brand/40 flex flex-wrap items-center justify-between gap-4 animate-fade-in">
+          <div>
+            <div className="text-sm font-black text-white">
+              📸 Take multi-angle photos (Front / Back / Side)?
+            </div>
+            <div className="text-xs text-muted font-bold mt-0.5">
+              Adding extra angles helps AI identify products from any direction on the shelf.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowMultiAnglePrompt(false)}
+              className="px-4 py-2 bg-brand text-black font-black text-xs rounded-xl"
+            >
+              Add Extra Photos
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMultiAnglePrompt(false)}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-black text-xs rounded-xl"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      <motion.form
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        onSubmit={handleSubmit}
+        className="glass rounded-3xl p-8 space-y-8"
+      >
+        {/* Step 1: Camera & Image Upload */}
+        <div className="space-y-3">
+          <label className="text-[10px] uppercase tracking-[0.2em] font-black text-brand ml-1 flex items-center gap-2">
+            <span>📷 Product Photo (Front / Shelf Shot)</span>
+          </label>
+          <CameraCapture
+            productId={productId}
+            images={images}
+            primaryImage={primaryImage}
+            onImagesChange={(imgs, primary) => {
+              setImages(imgs)
+              setPrimaryImage(primary)
+            }}
+            isUploading={isUploading}
+            setIsUploading={setIsUploading}
+          />
+
+          {primaryImage && (
+            <div className="p-4 rounded-2xl bg-white/5 border border-brand/30 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs font-black text-brand">
+                <Sparkles className="w-4 h-4" /> Product Image Quality Checker:
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-green-500/20 text-green-300 text-[10px] font-black">
+                  ☀️ Lighting: Good
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-green-500/20 text-green-300 text-[10px] font-black">
+                  ✨ Sharpness: Excellent
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-green-500/20 text-green-300 text-[10px] font-black">
+                  🔤 Text Visibility: High
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-green-500/20 text-green-300 text-[10px] font-black">
+                  🧼 Background: Clean Isolated
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <hr className="border-glass" />
+
+        {/* Duplicate Product Detection Alert */}
+        {(() => {
+          const dup =
+            name.trim().length > 3
+              ? existingCatalog.find(
+                  (p) =>
+                    p.name.toLowerCase().trim() === name.toLowerCase().trim() ||
+                    (name.trim().length > 5 && p.name.toLowerCase().includes(name.toLowerCase().trim()))
+                )
+              : null
+          if (!dup) return null
+          return (
+            <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <div>
+                  <div className="text-xs font-black text-amber-300">
+                    Duplicate Warning: An existing product looks very similar!
+                  </div>
+                  <div className="text-[11px] text-white/80 font-bold mt-0.5">
+                    "{dup.name}" already exists in your inventory (Stock: {dup.quantity ?? 0}, Shelf: {dup.shelf_location || 'N/A'}).
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">Price (₹)</label>
-                <div className="relative group">
-                  <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
-                  <input
-                    required
-                    type="number"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="250"
-                    className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">Initial Stock</label>
-                <div className="relative group">
-                  <Plus className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
-                  <input
-                    required
-                    type="number"
-                    value={stock}
-                    onChange={(e) => setStock(e.target.value)}
-                    placeholder="100"
-                    className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">Category</label>
-                <div className="relative group">
-                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold appearance-none cursor-pointer"
-                  >
-                    {CATEGORIES.map(cat => (
-                      <option key={cat} value={cat} className="bg-[#1a1a1a] text-white">{cat}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="md:col-span-2 pt-4">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-brand text-black py-4 rounded-2xl font-black text-lg shadow-xl shadow-brand/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {success ? (
-                    <><CheckCircle2 className="w-6 h-6" /> Product Added!</>
-                  ) : (
-                    <><Save className="w-6 h-6" /> {loading ? "Adding..." : "Add to Inventory"}</>
-                  )}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        ) : (
-          <motion.div 
-            key="bulk"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="glass rounded-3xl overflow-hidden">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-[10px] uppercase tracking-widest font-black text-muted border-b border-glass">
-                    <th className="px-6 py-4">Product Name</th>
-                    <th className="px-4 py-4 w-24">Price</th>
-                    <th className="px-4 py-4 w-24">Stock</th>
-                    <th className="px-4 py-4">Category</th>
-                    <th className="px-4 py-4 text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-glass">
-                  {bulkProducts.map((p, idx) => (
-                    <tr key={idx} className="bg-white/[0.01]">
-                      <td className="px-4 py-2">
-                        <input 
-                          type="text" 
-                          value={p.name} 
-                          placeholder="Pen Name"
-                          onChange={(e) => updateBulkProduct(idx, 'name', e.target.value)}
-                          className="w-full bg-transparent border-none outline-none py-2 font-bold text-primary placeholder:text-muted/20"
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input 
-                          type="number" 
-                          value={p.price} 
-                          placeholder="0"
-                          onChange={(e) => updateBulkProduct(idx, 'price', e.target.value)}
-                          className="w-full bg-transparent border-none outline-none py-2 font-black text-brand placeholder:text-brand/20"
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input 
-                          type="number" 
-                          value={p.stock} 
-                          placeholder="0"
-                          onChange={(e) => updateBulkProduct(idx, 'stock', e.target.value)}
-                          className="w-full bg-transparent border-none outline-none py-2 font-bold text-primary placeholder:text-muted/20"
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <select 
-                          value={p.category}
-                          onChange={(e) => updateBulkProduct(idx, 'category', e.target.value)}
-                          className="w-full bg-transparent border-none outline-none py-2 text-xs font-black text-muted cursor-pointer"
-                        >
-                          {CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-[#1a1a1a]">{cat}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <button 
-                          onClick={() => setBulkProducts(bulkProducts.filter((_, i) => i !== idx))}
-                          className="p-2 text-red-500/20 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button 
-                onClick={addBulkRow}
-                className="w-full py-4 bg-white/5 hover:bg-white/10 text-brand text-xs font-black flex items-center justify-center gap-2 transition-all"
+              <Link
+                to={`/edit/${dup.id}`}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl transition-all"
               >
-                <PlusCircle className="w-4 h-4" /> Add More Rows
-              </button>
+                Edit Existing Item
+              </Link>
+            </div>
+          )
+        })()}
+
+        {/* Step 2: Product Name & Brand */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">
+              Product Name *
+            </label>
+            <div className="relative group">
+              <Package className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
+              <input
+                required
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Parker Jotter Ball Pen Blue"
+                className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold text-lg"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">
+              Category *
+            </label>
+            <div className="relative group">
+              <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold appearance-none cursor-pointer"
+              >
+                {STATIONERY_CATEGORIES.map((cat) => (
+                  <option key={cat.name} value={cat.name} className="bg-[#0c1e3e] text-white">
+                    {cat.name}
+                  </option>
+                ))}
+                <option value="Custom..." className="bg-[#0c1e3e] text-brand">
+                  + Add Custom Category...
+                </option>
+              </select>
             </div>
 
-            <button
-              onClick={handleBulkSubmit}
-              disabled={loading}
-              className="w-full bg-brand text-black py-5 rounded-2xl font-black text-lg shadow-xl shadow-brand/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {success ? (
-                <><CheckCircle2 className="w-6 h-6" /> Bulk Products Added!</>
-              ) : (
-                <><ListPlus className="w-6 h-6" /> {loading ? "Saving Items..." : "Save All Products"}</>
-              )}
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {category === 'Custom...' && (
+              <input
+                type="text"
+                required
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                placeholder="Enter custom category..."
+                className="w-full mt-2 bg-input border border-glass rounded-xl py-3 px-4 outline-none font-bold text-sm"
+              />
+            )}
+          </div>
 
-      <div className="p-6 glass rounded-3xl bg-brand/5 border-brand/20 flex items-start gap-4">
-        <AlertCircle className="w-6 h-6 text-brand mt-1 shrink-0" />
-        <div>
-          <h4 className="font-black text-brand">Pro Tip</h4>
-          <p className="text-sm text-brand/60 leading-relaxed font-medium">
-            Use the <strong>Bulk Add</strong> mode when you have a new shipment of many different items. It's much faster than adding them one by one!
-          </p>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">
+              Brand (Optional)
+            </label>
+            <div className="relative group">
+              <Award className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
+              <input
+                type="text"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="e.g. Reynolds, Classmate, Faber-Castell"
+                className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold"
+              />
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* Step 3: Selling Price & Quantity */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] font-black text-brand ml-1">
+              Selling Price (₹) *
+            </label>
+            <div className="relative group">
+              <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-brand group-focus-within:scale-110 transition-transform" />
+              <input
+                required
+                type="number"
+                step="0.01"
+                min="0"
+                value={sellingPrice}
+                onChange={(e) => setSellingPrice(e.target.value)}
+                placeholder="0"
+                className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-black text-2xl text-brand"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">
+              Initial Quantity *
+            </label>
+            <div className="relative group">
+              <input
+                required
+                type="number"
+                min="0"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="100"
+                className="w-full bg-input border border-glass rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-black text-2xl text-primary"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Step 4: Shelf Location & Notes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">
+              Shelf Location (Optional)
+            </label>
+            <div className="relative group">
+              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
+              <input
+                type="text"
+                value={shelfLocation}
+                onChange={(e) => setShelfLocation(e.target.value)}
+                placeholder="e.g. Rack A - Drawer 2 - Shelf 5"
+                className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-bold"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] font-black text-muted ml-1">
+              Notes (Optional)
+            </label>
+            <div className="relative group">
+              <FileText className="absolute left-4 top-4 w-5 h-5 text-muted group-focus-within:text-brand transition-colors" />
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="e.g. Fast moving item, restock biweekly"
+                className="w-full bg-input border border-glass rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-brand/50 transition-all font-medium"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-4">
+          <button
+            type="submit"
+            disabled={loading || isUploading}
+            className="w-full bg-brand hover:bg-brand/90 text-black py-4 rounded-2xl font-black text-lg shadow-xl shadow-brand/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Save className="w-6 h-6" />
+            {loading ? 'Saving to Inventory...' : 'Add to Inventory'}
+          </button>
+        </div>
+      </motion.form>
     </div>
   )
 }

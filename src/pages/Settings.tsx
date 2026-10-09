@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Store, Database, Moon, Bell, Shield, Cloud, CheckCircle2, Smartphone, Mail, Lock, Eye, EyeOff, IndianRupee } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { SettingsService } from '../services/SettingsService'
 
 type SettingsTab = 'profile' | 'database' | 'appearance' | 'notifications' | 'security'
 
@@ -24,23 +25,20 @@ export default function Settings() {
   const [pin, setPin] = useState('')
   const [showPin, setShowPin] = useState(false)
 
-  // Load settings from LocalStorage on mount
+  // Load settings from SettingsService and LocalStorage on mount
   useEffect(() => {
-    const savedName = localStorage.getItem('vajra_shop_name')
-    const savedAddress = localStorage.getItem('vajra_shop_address')
-    const savedUpi = localStorage.getItem('vajra_shop_upi')
-    const savedMsg = localStorage.getItem('vajra_whatsapp_msg')
-    const savedTax = localStorage.getItem('vajra_tax_rate')
-    const savedStatus = localStorage.getItem('vajra_shop_status')
+    SettingsService.getSettings().then((settings) => {
+      setShopName(settings.shopName)
+      setAddress(settings.address || '')
+      setUpiId(settings.upiId || '')
+      setWhatsappMessage(settings.whatsappMessage || 'Thank you for shopping with us!')
+      setTaxRate(settings.taxRate || 0)
+      setIsShopOpen(settings.isShopOpen ?? true)
+    }).catch(() => {})
+
     const savedTheme = localStorage.getItem('vajra_theme')
     const savedPin = localStorage.getItem('vajra_security_pin')
     
-    if (savedName) setShopName(savedName)
-    if (savedAddress) setAddress(savedAddress)
-    if (savedUpi) setUpiId(savedUpi)
-    if (savedMsg) setWhatsappMessage(savedMsg)
-    if (savedTax) setTaxRate(Number(savedTax))
-    if (savedStatus) setIsShopOpen(savedStatus === 'open')
     if (savedTheme === 'light') {
       setDarkMode(false)
       document.documentElement.classList.add('light')
@@ -60,13 +58,15 @@ export default function Settings() {
     }
   }
 
-  const handleSave = () => {
-    localStorage.setItem('vajra_shop_name', shopName)
-    localStorage.setItem('vajra_shop_address', address)
-    localStorage.setItem('vajra_shop_upi', upiId)
-    localStorage.setItem('vajra_whatsapp_msg', whatsappMessage)
-    localStorage.setItem('vajra_tax_rate', taxRate.toString())
-    localStorage.setItem('vajra_shop_status', isShopOpen ? 'open' : 'closed')
+  const handleSave = async () => {
+    await SettingsService.saveSettings({
+      shopName,
+      address,
+      upiId,
+      whatsappMessage,
+      taxRate,
+      isShopOpen
+    })
     localStorage.setItem('vajra_security_pin', pin)
     setSaveSuccess(true)
     setTimeout(() => setSaveSuccess(false), 2000)
@@ -123,15 +123,60 @@ export default function Settings() {
 
             {activeTab === 'database' && (
               <motion.div key="database" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass rounded-3xl p-8 space-y-8">
-                <h3 className="text-lg font-bold flex items-center gap-2 text-blue-400"><Cloud /> Database Status</h3>
+                <h3 className="text-lg font-bold flex items-center gap-2 text-brand"><Cloud /> Cloud & Database Status</h3>
                 <div className="space-y-4">
                   <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/20">Connection URL</label>
-                    <div className="text-sm font-mono mt-1 text-white/60 truncate">iuvarkauuxohtuuahchh.supabase.co</div>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/20">Firebase Project ID (Primary Architecture)</label>
+                    <div className="text-sm font-mono mt-1 text-white/80 truncate">
+                      {import.meta.env.VITE_FIREBASE_PROJECT_ID || 'vajra-inventory-1e5e4'} (Offline Persistent Cache Enabled)
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 p-4 bg-green-500/10 border border-green-500/20 rounded-2xl">
                     <CheckCircle2 className="text-green-500 w-5 h-5" />
-                    <span className="text-sm text-green-500 font-bold">Successfully Connected</span>
+                    <span className="text-sm text-green-400 font-bold">Firebase & Firestore Service Layer Active</span>
+                  </div>
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/20">Firebase Storage & Cloud Functions</label>
+                    <div className="text-sm font-mono mt-1 text-white/80 truncate">gs://vajra-inventory-1e5e4.firebasestorage.app • us-central1</div>
+                  </div>
+
+                  <div className="p-5 bg-brand/10 border border-brand/30 rounded-2xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-widest text-brand">
+                          Developer Tools
+                        </div>
+                        <div className="text-sm font-black text-white mt-0.5">
+                          AI Recognition Lab (/ai-lab)
+                        </div>
+                      </div>
+                      <a
+                        href="/ai-lab"
+                        className="px-4 py-2 bg-brand text-black font-black text-xs rounded-xl shadow hover:bg-brand/90 transition-all"
+                      >
+                        Launch Lab
+                      </a>
+                    </div>
+
+                    {import.meta.env.DEV && (
+                      <div className="pt-3 border-t border-brand/20 flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-black text-white">
+                            Firebase Health Diagnostics (/dev/firebase-health)
+                          </div>
+                          <div className="text-[11px] text-muted font-medium">
+                            Verifies live Auth, Firestore, Storage, Cache, and Cloud Functions status.
+                          </div>
+                        </div>
+                        <a
+                          href="/dev/firebase-health"
+                          className="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 font-black text-xs rounded-xl shadow hover:bg-green-500/30 transition-all"
+                        >
+                          Run Health Check
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>

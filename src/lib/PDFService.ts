@@ -1,5 +1,3 @@
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { format } from 'date-fns'
 
 interface ReceiptData {
@@ -11,7 +9,11 @@ interface ReceiptData {
   total: number
 }
 
-export const generateReceiptPDF = (data: ReceiptData) => {
+export const generateReceiptPDF = async (data: ReceiptData) => {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable')
+  ])
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const date = format(new Date(), 'dd MMM yyyy, hh:mm a')

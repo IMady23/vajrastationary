@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, IndianRupee } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase, type Expense } from '../lib/supabase'
+import { type Expense } from '../types'
+import { AnalyticsService } from '../services/AnalyticsService'
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -20,8 +21,7 @@ export default function Expenses() {
 
   const fetchExpenses = async () => {
     try {
-      const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false })
-      if (error) throw error
+      const data = await AnalyticsService.getExpenses()
       setExpenses(data || [])
     } catch (err) {
       console.error(err)
@@ -33,13 +33,12 @@ export default function Expenses() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('expenses').insert([{
+      await AnalyticsService.createExpense({
         category,
         amount: parseFloat(amount),
         description,
         date
-      }])
-      if (error) throw error
+      })
       
       setAmount('')
       setDescription('')
@@ -53,8 +52,7 @@ export default function Expenses() {
   const deleteExpense = async (id: string) => {
     if (!confirm('Delete this expense record?')) return
     try {
-      const { error } = await supabase.from('expenses').delete().eq('id', id)
-      if (error) throw error
+      await AnalyticsService.deleteExpense(id)
       setExpenses(expenses.filter(e => e.id !== id))
     } catch (err) {
       alert('Error deleting expense')

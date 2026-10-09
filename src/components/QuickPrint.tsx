@@ -20,7 +20,9 @@ export default function QuickPrint() {
       id: `custom-${Date.now()}`,
       name: `${selectedJob.name}`,
       price: Number(price),
+      selling_price: Number(price),
       stock: 9999,
+      quantity: 9999,
       category: 'Xerox/Printing'
     }, copies)
     

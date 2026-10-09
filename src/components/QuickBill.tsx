@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { ShoppingCart, X, Trash2, Plus, Minus, MessageCircle, Save } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '../context/CartContext'
-import { supabase } from '../lib/supabase'
+import { ProductService } from '../services/ProductService'
+import { AnalyticsService } from '../services/AnalyticsService'
 import { generateReceiptPDF } from '../lib/PDFService'
 import { QRCodeSVG } from 'qrcode.react'
 
@@ -249,56 +250,43 @@ export default function QuickBill() {
                 <div className="grid grid-cols-1 gap-3">
                   <button 
                     onClick={async () => {
-                      // 1. Process Stock Reduction in Supabase
+                      // 1. Process Stock Reduction in Firestore
                       let lowStockAlerts: string[] = []
                       
                       try {
                         for (const item of cart) {
                           if (item.id.startsWith('custom-')) continue;
-                          const newStock = item.stock - item.quantity
-                          const { error } = await supabase
-                            .from('products')
-                            .update({ stock: newStock })
-                            .eq('id', item.id)
-                          
-                          if (error) throw error
+                          const newStock = Math.max(0, item.stock - item.quantity)
+                          await ProductService.updateProduct(item.id, { quantity: newStock, stock: newStock })
                           
                           if (newStock < 10) {
                             lowStockAlerts.push(`${item.name} (Remaining: ${newStock})`)
                           }
                         }
 
-                        // 2. Record the Sale in Supabase
-                        const { error: saleError } = await supabase
-                          .from('sales')
-                          .insert([{
-                            items: cart,
-                            total: grandTotal,
-                            customer_phone: customerPhone || 'Walk-in',
-                            customer_name: customerName || 'Walk-in',
-                            profit: grandTotal * 0.2 // Estimated 20% profit for now
-                          }])
-                        
-                        if (saleError) console.error("Sale recording failed:", saleError)
+                        // 2. Record the Sale in Firestore
+                        await AnalyticsService.createSale({
+                          items: cart,
+                          total: grandTotal,
+                          customer_phone: customerPhone || 'Walk-in',
+                          profit: grandTotal * 0.2
+                        })
 
                         // 3. Generate WhatsApp Link for Customer
                         generateWhatsAppLink()
 
-                        // 3. Handle Low Stock Alerts
+                        // 4. Handle Low Stock Alerts
                         if (lowStockAlerts.length > 0) {
                           const alertMsg = `LOW STOCK ALERT!\n${lowStockAlerts.join('\n')}`
                           alert(alertMsg)
                           
-                          // Optional: Auto-trigger email draft
                           const emailSubject = encodeURIComponent("LOW STOCK ALERT: Vajra Stationery")
                           const emailBody = encodeURIComponent(`The following items are low in stock:\n\n${lowStockAlerts.join('\n')}`)
                           window.open(`mailto:madhavvadkapuram@gmail.com?subject=${emailSubject}&body=${emailBody}`)
                         }
                         
-                        // Clear cart after successful transaction
                         clearCart()
                         setIsOpen(false)
-                        
                       } catch (e: any) {
                         alert("Error updating inventory: " + e.message)
                       }
@@ -316,19 +304,14 @@ export default function QuickBill() {
                         const shopPhone = '7780548516'
                         const shopName = "Vajra Stationery & Xerox"
                         
-                        // 1. Check current stock for warnings
                         let lowStockMsg = ""
-                        const dbCartItems = cart.filter(i => !i.id.startsWith('custom-')).map(i => i.id)
-                        const { data: currentProducts } = await supabase.from('products').select('name, stock').in('id', dbCartItems.length > 0 ? dbCartItems : ['none'])
-                        
-                        if (currentProducts) {
-                          const lowItems = currentProducts.filter(p => p.stock < 10)
-                          if (lowItems.length > 0) {
-                            lowStockMsg = `\n\n⚠️ *LOW STOCK ALERT!*`
-                            lowItems.forEach(item => {
-                              lowStockMsg += `\n- ${item.name}: Only ${item.stock} left!`
-                            })
-                          }
+                        const currentProducts = await ProductService.getProducts()
+                        const lowItems = currentProducts.filter(p => p.quantity < 10)
+                        if (lowItems.length > 0) {
+                          lowStockMsg = `\n\n⚠️ *LOW STOCK ALERT!*`
+                          lowItems.forEach(item => {
+                            lowStockMsg += `\n- ${item.name}: Only ${item.quantity} left!`
+                          })
                         }
 
                         let message = `*COPY: ${shopName} - Bill Summary*\n`
