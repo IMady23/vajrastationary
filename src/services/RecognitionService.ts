@@ -119,7 +119,7 @@ export class RecognitionService {
   }
 
   // --- STUBS FOR FUTURE STAGES (To fix build errors in Dashboard / Lab) ---
-  static async logRecognition(result: any, type: string) {}
-  static async getRecognitionHistory() { return [] }
-  static async getAnalyticsStats() { return {} }
+  static async logRecognition(result: any, type?: string) {}
+  static async getRecognitionHistory(limit?: number) { return [] }
+  static async getAnalyticsStats() { return { total: 0, success: 0, failed: 0, avgConfidence: 0 } }
 }

@@ -26,7 +26,7 @@ export default function EditProduct() {
   const [quantity, setQuantity] = useState('')
   const [shelfLocation, setShelfLocation] = useState('')
   const [notes, setNotes] = useState('')
-  const [status, setStatus] = useState<ProductStatus>('Active')
+  const [status, setStatus] = useState<ProductStatus>('ACTIVE')
   const [createdAt, setCreatedAt] = useState('')
   const [updatedAt, setUpdatedAt] = useState('')
 
@@ -36,14 +36,14 @@ export default function EditProduct() {
       try {
         const product = await ProductService.getProductById(id)
         if (product) {
-          setName(product.name)
+          setName(product.name || '')
           setCategory(product.category)
           setBrand(product.brand || '')
           setSellingPrice(String(product.selling_price ?? product.price))
           setQuantity(String(product.quantity ?? product.stock))
           setShelfLocation(product.shelf_location || '')
           setNotes(product.notes || '')
-          setStatus(product.status || 'Active')
+          setStatus(product.status || 'ACTIVE')
           setImages(product.images || [])
           setPrimaryImage(product.primary_image || null)
           setCreatedAt(product.created_at || '')
@@ -64,7 +64,7 @@ export default function EditProduct() {
 
     const parsedPrice = parseFloat(sellingPrice) || 0
     const parsedQty = parseInt(quantity, 10) || 0
-    const finalStatus: ProductStatus = parsedQty <= 0 ? 'Out of Stock' : status
+    const finalStatus: ProductStatus = parsedQty <= 0 ? 'OUT_OF_STOCK' : status
 
     try {
       const payload = {

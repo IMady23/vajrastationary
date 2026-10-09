@@ -49,7 +49,7 @@ export default function AddProduct() {
     const parsedPrice = parseFloat(sellingPrice) || 0
     const parsedQty = parseInt(quantity, 10) || 0
 
-    const status: ProductStatus = parsedQty <= 0 ? 'Out of Stock' : 'Active'
+    const status: ProductStatus = parsedQty <= 0 ? 'OUT_OF_STOCK' : 'ACTIVE'
 
     try {
       const payload = {

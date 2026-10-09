@@ -19,11 +19,15 @@ export default function QuickPrint() {
     addToCart({
       id: `custom-${Date.now()}`,
       name: `${selectedJob.name}`,
+      product_name: `${selectedJob.name}`,
+      canonical_name: `${selectedJob.name}`.toLowerCase().replace(/\s+/g, '_'),
       price: Number(price),
       selling_price: Number(price),
       stock: 9999,
       quantity: 9999,
-      category: 'Xerox/Printing'
+      category: 'Xerox/Printing',
+      unit: 'pcs',
+      status: 'ACTIVE'
     }, copies)
     
     // Reset

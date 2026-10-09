@@ -22,6 +22,16 @@ export type Product = {
   price?: number
   stock?: number
   quantity?: number
+  selling_price?: number
+  purchase_price?: number
+  current_stock?: number
+  minimum_stock?: number
+  primary_image?: string
+  image_hash?: string
+  shelf_location?: string
+  scan_count?: number
+  images?: string[]
+  notes?: string
 }
 
 export type Location = {
